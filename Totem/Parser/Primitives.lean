@@ -31,6 +31,7 @@ def isOctalDigit (c : Char) : Bool := c >= '0' && c <= '7'
 /-- Check if character is a binary digit -/
 def isBinaryDigit (c : Char) : Bool := c == '0' || c == '1'
 
+-- TODO: Replace with Staple.Hex.hexCharToNat after staple release
 /-- Convert hex digit to value -/
 def hexDigitValue (c : Char) : Nat :=
   if c >= '0' && c <= '9' then c.toNat - '0'.toNat
