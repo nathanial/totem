@@ -10,7 +10,7 @@ namespace Totem.Parser
 open Sift
 
 /-- Parse a bare key (A-Za-z0-9_-) -/
-def parseBareKey : Sift.Parser String := do
+def parseBareKey : Sift.Parser Unit String := do
   let result ← takeWhile isBareKeyChar
   if result.isEmpty then
     match ← peek with
@@ -19,14 +19,14 @@ def parseBareKey : Sift.Parser String := do
   return result
 
 /-- Parse a single key (bare or quoted) -/
-def parseSimpleKey : Sift.Parser String := do
+def parseSimpleKey : Sift.Parser Unit String := do
   match ← peek with
   | some '"' => parseBasicString
   | some '\'' => parseLiteralString
   | _ => parseBareKey
 
 /-- Parse a dotted key (key.key.key) returning list of parts -/
-partial def parseDottedKey : Sift.Parser (List String) := do
+partial def parseDottedKey : Sift.Parser Unit (List String) := do
   let mut parts := []
   let first ← parseSimpleKey
   parts := [first]

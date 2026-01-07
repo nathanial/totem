@@ -11,7 +11,7 @@ namespace Totem.Parser
 open Sift Totem
 
 /-- Parse local date: YYYY-MM-DD -/
-def parseLocalDate : Sift.Parser LocalDate := do
+def parseLocalDate : Sift.Parser Unit LocalDate := do
   let yearStr ← readExactDigits 4
   let _ ← char '-'
   let monthStr ← readExactDigits 2
@@ -31,7 +31,7 @@ def parseLocalDate : Sift.Parser LocalDate := do
   return { year, month, day }
 
 /-- Parse fractional seconds, returning nanoseconds -/
-partial def parseFractionalSeconds : Sift.Parser Nat := do
+partial def parseFractionalSeconds : Sift.Parser Unit Nat := do
   let mut result : Nat := 0
   let mut count := 0
   let mut going := true
@@ -55,7 +55,7 @@ partial def parseFractionalSeconds : Sift.Parser Nat := do
   return result
 
 /-- Parse local time: HH:MM:SS[.nnnnnnnnn] -/
-def parseLocalTime : Sift.Parser LocalTime := do
+def parseLocalTime : Sift.Parser Unit LocalTime := do
   let hourStr ← readExactDigits 2
   let _ ← char ':'
   let minuteStr ← readExactDigits 2
@@ -84,7 +84,7 @@ def parseLocalTime : Sift.Parser LocalTime := do
   return { hour, minute, second, nanosecond }
 
 /-- Parse timezone offset: Z, +HH:MM, -HH:MM -/
-def parseTimezoneOffset : Sift.Parser TimezoneOffset := do
+def parseTimezoneOffset : Sift.Parser Unit TimezoneOffset := do
   match ← peek with
   | some 'Z' | some 'z' =>
     let _ ← anyChar
@@ -113,7 +113,7 @@ def parseTimezoneOffset : Sift.Parser TimezoneOffset := do
     Parser.fail "expected timezone offset (Z, +HH:MM, or -HH:MM)"
 
 /-- Parse full datetime with timezone: YYYY-MM-DDTHH:MM:SS[.nnn][Z|+HH:MM|-HH:MM] -/
-def parseFullDateTime : Sift.Parser DateTime := do
+def parseFullDateTime : Sift.Parser Unit DateTime := do
   let date ← parseLocalDate
   -- Accept T or space as separator
   match ← peek with
@@ -124,7 +124,7 @@ def parseFullDateTime : Sift.Parser DateTime := do
   return { date, time, timezone := some timezone }
 
 /-- Parse local datetime (no timezone): YYYY-MM-DDTHH:MM:SS[.nnn] -/
-def parseLocalDateTime : Sift.Parser DateTime := do
+def parseLocalDateTime : Sift.Parser Unit DateTime := do
   let date ← parseLocalDate
   match ← peek with
   | some 'T' | some 't' | some ' ' => let _ ← anyChar
@@ -133,7 +133,7 @@ def parseLocalDateTime : Sift.Parser DateTime := do
   return { date, time, timezone := none }
 
 /-- Check what kind of datetime this is and parse accordingly -/
-def parseDateTimeOrDate : Sift.Parser Value := do
+def parseDateTimeOrDate : Sift.Parser Unit Value := do
   let date ← lookAhead parseLocalDate
   -- Re-parse and check if there's a time component
   let _ ← parseLocalDate
@@ -154,7 +154,7 @@ def parseDateTimeOrDate : Sift.Parser Value := do
     return .localDate date
 
 /-- Check if current position looks like a datetime (starts with 4 digits and hyphen) -/
-def looksLikeDateTime : Sift.Parser Bool := do
+def looksLikeDateTime : Sift.Parser Unit Bool := do
   lookAhead do
     let mut count := 0
     -- Check for 4 digits

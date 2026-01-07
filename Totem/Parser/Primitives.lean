@@ -36,10 +36,10 @@ def hexDigitValue (c : Char) : Nat :=
   else 0
 
 /-- Skip whitespace (space and tab only) -/
-def skipWs : Sift.Parser Unit := hspaces
+def skipWs : Sift.Parser Unit Unit := hspaces
 
 /-- Skip a single newline (LF or CRLF) -/
-def skipNewline : Sift.Parser Bool := do
+def skipNewline : Sift.Parser Unit Bool := do
   match ← peek with
   | some '\n' =>
     let _ ← anyChar
@@ -52,18 +52,18 @@ def skipNewline : Sift.Parser Bool := do
   | _ => return false
 
 /-- Skip comment (# to end of line) -/
-def skipComment : Sift.Parser Unit := do
+def skipComment : Sift.Parser Unit Unit := do
   if (← peek) == some '#' then
     let _ ← anyChar
     skipWhile (fun c => !isNewline c)
 
 /-- Skip whitespace and comments on same line -/
-def skipLineTrivia : Sift.Parser Unit := do
+def skipLineTrivia : Sift.Parser Unit Unit := do
   skipWs
   skipComment
 
 /-- Skip whitespace, comments, and newlines -/
-partial def skipTrivia : Sift.Parser Unit := do
+partial def skipTrivia : Sift.Parser Unit Unit := do
   skipWs
   match ← peek with
   | some '#' =>
@@ -77,16 +77,16 @@ partial def skipTrivia : Sift.Parser Unit := do
   | none => pure ()
 
 /-- Parse digits with underscore separators (re-exported from Sift) -/
-def digitsWithUnderscores (isValidDigit : Char → Bool) : Sift.Parser String :=
+def digitsWithUnderscores (isValidDigit : Char → Bool) : Sift.Parser Unit String :=
   Sift.digitsWithUnderscores isValidDigit
 
 /-- Parse exactly N decimal digits -/
-def readExactDigits (n : Nat) : Sift.Parser String := do
+def readExactDigits (n : Nat) : Sift.Parser Unit String := do
   let digits ← count n digit
   pure (String.mk digits.toList)
 
 /-- TOML newline parser (LF or CRLF) -/
-def tomlNewline : Sift.Parser Unit :=
+def tomlNewline : Sift.Parser Unit Unit :=
   (char '\r' *> char '\n' *> pure ()) <|> (char '\n' *> pure ())
 
 end Totem.Parser

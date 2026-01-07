@@ -24,7 +24,7 @@ where
     else go (n / 16) (hexChar (n % 16) :: acc)
 
 /-- Parse a 4-digit unicode escape (\uXXXX) -/
-def parseUnicodeEscape4 : Sift.Parser Char := do
+def parseUnicodeEscape4 : Sift.Parser Unit Char := do
   let code ← hexDigitsN 4
   if h : code.toUInt32 < 0x110000 then
     pure (Char.ofNat code)
@@ -32,7 +32,7 @@ def parseUnicodeEscape4 : Sift.Parser Char := do
     Parser.fail s!"invalid unicode code point: {code}"
 
 /-- Parse an 8-digit unicode escape (\UXXXXXXXX) -/
-def parseUnicodeEscape8 : Sift.Parser Char := do
+def parseUnicodeEscape8 : Sift.Parser Unit Char := do
   let code ← hexDigitsN 8
   if h : code.toUInt32 < 0x110000 then
     pure (Char.ofNat code)
@@ -40,7 +40,7 @@ def parseUnicodeEscape8 : Sift.Parser Char := do
     Parser.fail s!"invalid unicode code point: {code}"
 
 /-- Parse escape sequence in basic string -/
-def parseEscape : Sift.Parser Char := do
+def parseEscape : Sift.Parser Unit Char := do
   let escaped ← anyChar
   match escaped with
   | 'b' => return '\x08'  -- backspace
@@ -55,7 +55,7 @@ def parseEscape : Sift.Parser Char := do
   | c => Parser.fail s!"invalid escape sequence: \\{c}"
 
 /-- Parse basic string (double-quoted with escapes) -/
-partial def parseBasicString : Sift.Parser String := do
+partial def parseBasicString : Sift.Parser Unit String := do
   let _ ← char '"'
   let mut result := ""
   while (← peek) != some '"' do
@@ -75,7 +75,7 @@ partial def parseBasicString : Sift.Parser String := do
   return result
 
 /-- Parse multi-line basic string (triple double-quoted) -/
-partial def parseMultiLineBasicString : Sift.Parser String := do
+partial def parseMultiLineBasicString : Sift.Parser Unit String := do
   let _ ← string "\"\"\""
   -- Skip immediate newline after opening quotes
   if (← peek) == some '\n' then
@@ -117,7 +117,7 @@ partial def parseMultiLineBasicString : Sift.Parser String := do
   return result
 
 /-- Parse literal string (single-quoted, no escapes) -/
-partial def parseLiteralString : Sift.Parser String := do
+partial def parseLiteralString : Sift.Parser Unit String := do
   let _ ← char '\''
   let mut result := ""
   while (← peek) != some '\'' do
@@ -134,7 +134,7 @@ partial def parseLiteralString : Sift.Parser String := do
   return result
 
 /-- Parse multi-line literal string (triple single-quoted) -/
-partial def parseMultiLineLiteralString : Sift.Parser String := do
+partial def parseMultiLineLiteralString : Sift.Parser Unit String := do
   let _ ← string "'''"
   -- Skip immediate newline after opening quotes
   if (← peek) == some '\n' then
@@ -159,7 +159,7 @@ partial def parseMultiLineLiteralString : Sift.Parser String := do
   return result
 
 /-- Parse any TOML string (basic, literal, or multi-line variants) -/
-def parseString : Sift.Parser String := do
+def parseString : Sift.Parser Unit String := do
   -- Check for triple quotes first (order matters)
   if (← peekString 3) == some "\"\"\"" then
     parseMultiLineBasicString

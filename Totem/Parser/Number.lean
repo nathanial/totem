@@ -17,14 +17,14 @@ private def posInf : Float := 1.0 / 0.0
 private def nan : Float := 0.0 / 0.0
 
 /-- Parse sign, returning multiplier -/
-def parseSign : Sift.Parser Int := do
+def parseSign : Sift.Parser Unit Int := do
   match ← peek with
   | some '+' => let _ ← anyChar; return 1
   | some '-' => let _ ← anyChar; return -1
   | _ => return 1
 
 /-- Parse decimal integer (with underscores) -/
-partial def parseDecimalInt (leadDigit : Option Char := none) : Sift.Parser Int := do
+partial def parseDecimalInt (leadDigit : Option Char := none) : Sift.Parser Unit Int := do
   let mut result : Nat := 0
   let mut hasDigit := false
   let mut lastWasUnderscore := false
@@ -58,7 +58,7 @@ partial def parseDecimalInt (leadDigit : Option Char := none) : Sift.Parser Int 
   return Int.ofNat result
 
 /-- Parse hexadecimal integer -/
-partial def parseHexInt : Sift.Parser Int := do
+partial def parseHexInt : Sift.Parser Unit Int := do
   let mut result : Nat := 0
   let mut hasDigit := false
   let mut lastWasUnderscore := false
@@ -87,7 +87,7 @@ partial def parseHexInt : Sift.Parser Int := do
   return Int.ofNat result
 
 /-- Parse octal integer -/
-partial def parseOctalInt : Sift.Parser Int := do
+partial def parseOctalInt : Sift.Parser Unit Int := do
   let mut result : Nat := 0
   let mut hasDigit := false
   let mut lastWasUnderscore := false
@@ -116,7 +116,7 @@ partial def parseOctalInt : Sift.Parser Int := do
   return Int.ofNat result
 
 /-- Parse binary integer -/
-partial def parseBinaryInt : Sift.Parser Int := do
+partial def parseBinaryInt : Sift.Parser Unit Int := do
   let mut result : Nat := 0
   let mut hasDigit := false
   let mut lastWasUnderscore := false
@@ -145,7 +145,7 @@ partial def parseBinaryInt : Sift.Parser Int := do
   return Int.ofNat result
 
 /-- Parse TOML integer -/
-def parseInteger : Sift.Parser Int := do
+def parseInteger : Sift.Parser Unit Int := do
   let sign ← parseSign
 
   -- Check for prefix
@@ -167,7 +167,7 @@ def parseInteger : Sift.Parser Int := do
     return sign * (← parseDecimalInt)
 
 /-- Parse fractional part of float (after decimal point) -/
-partial def parseFraction : Sift.Parser Float := do
+partial def parseFraction : Sift.Parser Unit Float := do
   let mut result : Float := 0
   let mut divisor : Float := 10
   let mut hasDigit := false
@@ -198,7 +198,7 @@ partial def parseFraction : Sift.Parser Float := do
   return result
 
 /-- Parse exponent part of float -/
-def parseExponent : Sift.Parser Int := do
+def parseExponent : Sift.Parser Unit Int := do
   let sign ← parseSign
   let value ← parseDecimalInt
   return sign * value
@@ -209,7 +209,7 @@ private def intToFloat (i : Int) : Float :=
   else -((-i).toNat.toFloat)
 
 /-- Parse TOML float -/
-partial def parseFloat : Sift.Parser Float := do
+partial def parseFloat : Sift.Parser Unit Float := do
   let sign ← parseSign
   let signFloat : Float := if sign < 0 then -1.0 else 1.0
 
@@ -248,7 +248,7 @@ partial def parseFloat : Sift.Parser Float := do
   return signFloat * result
 
 /-- Check if this looks like a float (has . or e/E after digits) -/
-def looksLikeFloat : Sift.Parser Bool := do
+def looksLikeFloat : Sift.Parser Unit Bool := do
   lookAhead do
     -- Skip optional sign
     if (← peek).any (fun c => c == '+' || c == '-') then
@@ -268,7 +268,7 @@ def looksLikeFloat : Sift.Parser Bool := do
     return (← peek).any (fun c => c == '.' || c == 'e' || c == 'E')
 
 /-- Parse number (integer or float) -/
-def parseNumber : Sift.Parser Value := do
+def parseNumber : Sift.Parser Unit Value := do
   if ← looksLikeFloat then
     return .float (← parseFloat)
   else

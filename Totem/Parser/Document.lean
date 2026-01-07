@@ -10,7 +10,7 @@ namespace Totem.Parser
 open Sift Totem
 
 /-- Parse a table header path [table.path] -/
-def parseTableHeader : Sift.Parser (List String) := do
+def parseTableHeader : Sift.Parser Unit (List String) := do
   let _ ← char '['
   skipWs
   let path ← parseDottedKey
@@ -19,7 +19,7 @@ def parseTableHeader : Sift.Parser (List String) := do
   return path
 
 /-- Parse an array of tables header [[array.path]] -/
-def parseArrayOfTablesHeader : Sift.Parser (List String) := do
+def parseArrayOfTablesHeader : Sift.Parser Unit (List String) := do
   let _ ← string "[["
   skipWs
   let path ← parseDottedKey
@@ -35,7 +35,7 @@ structure DocParserState where
   arrayOfTables : Array (List String) := #[]
 
 /-- Check if a table path would conflict with existing definitions -/
-def checkTableConflict (state : DocParserState) (path : List String) : Sift.Parser Unit := do
+def checkTableConflict (state : DocParserState) (path : List String) : Sift.Parser Unit Unit := do
   -- Check if this exact path was already defined as an explicit table
   if state.explicitTables.contains path then
     Parser.fail s!"duplicate table '{String.intercalate "." path}'"
@@ -92,7 +92,7 @@ def appendToArrayOfTables (root : Table) (path : List String) (newTable : Table)
     root.insertPath parentPath (.inlineTable (parent.insert key (.array arr)))
 
 /-- Parse a complete TOML document -/
-partial def parseDocument : Sift.Parser Table := do
+partial def parseDocument : Sift.Parser Unit Table := do
   let mut root := Table.empty
   let mut currentPath : List String := []
   let mut state : DocParserState := {}

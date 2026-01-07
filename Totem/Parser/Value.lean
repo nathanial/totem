@@ -27,7 +27,7 @@ def valueTypeCategory : Value → String
 
 mutual
   /-- Parse a TOML value -/
-  partial def parseValue : Sift.Parser Value := do
+  partial def parseValue : Sift.Parser Unit Value := do
     skipWs
     match ← peek with
     | some '"' =>
@@ -69,7 +69,7 @@ mutual
       Parser.fail "unexpected end of input while parsing value"
 
   /-- Parse a TOML array -/
-  partial def parseArray : Sift.Parser Value := do
+  partial def parseArray : Sift.Parser Unit Value := do
     let _ ← char '['
     skipTrivia
 
@@ -104,7 +104,7 @@ mutual
     return .array elements
 
   /-- Parse a TOML inline table -/
-  partial def parseInlineTable : Sift.Parser Value := do
+  partial def parseInlineTable : Sift.Parser Unit Value := do
     let _ ← char '{'
     skipWs
 
