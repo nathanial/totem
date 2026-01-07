@@ -35,6 +35,7 @@
   - Environment variable interpolation: ${VAR} and ${VAR:-default}
 -/
 
+import Sift
 import Totem.Core
 import Totem.Parser
 import Totem.Extract
@@ -43,7 +44,7 @@ import Totem.Env
 namespace Totem
 
 /-- Parse TOML from a string -/
-def parse (input : String) : ParseResult Table :=
+def parse (input : String) : Except Sift.ParseError Table :=
   Parser.parse input
 
 /-- Extract env var names from a string -/
@@ -103,10 +104,13 @@ def parseWithEnv (input : String) : IO (Except String Table) := do
 
 /-- Parse TOML with a custom environment resolver -/
 def parseWithEnvResolver (input : String) (getEnv : String → Option String)
-    : ParseResult Table := do
-  let table ← Parser.parse input
-  Env.interpolateTable table getEnv |>.mapError fun e =>
-    .other { offset := 0, line := 1, column := 1 } (toString e)
+    : Except String Table := do
+  match Parser.parse input with
+  | .error e => .error (toString e)
+  | .ok table =>
+    match Env.interpolateTable table getEnv with
+    | .error e => .error (toString e)
+    | .ok t => .ok t
 
 /-- Load TOML from a file -/
 def loadFile (path : System.FilePath) : IO (Except String Table) := do

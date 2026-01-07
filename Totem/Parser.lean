@@ -1,8 +1,7 @@
 /-
   Totem.Parser
-  TOML parser modules
+  TOML parser modules using Sift
 -/
-import Totem.Parser.State
 import Totem.Parser.Primitives
 import Totem.Parser.String
 import Totem.Parser.Number

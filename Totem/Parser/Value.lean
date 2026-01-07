@@ -1,7 +1,8 @@
 /-
   Totem.Parser.Value
-  TOML value parsing (all value types including arrays and inline tables)
+  TOML value parsing (all value types including arrays and inline tables) using Sift
 -/
+import Sift
 import Totem.Parser.String
 import Totem.Parser.Number
 import Totem.Parser.Key
@@ -9,7 +10,7 @@ import Totem.Parser.DateTime
 
 namespace Totem.Parser
 
-open Totem Parser
+open Sift Totem
 
 /-- Get the type category of a value for homogeneous array checking -/
 def valueTypeCategory : Value → String
@@ -26,19 +27,18 @@ def valueTypeCategory : Value → String
 
 mutual
   /-- Parse a TOML value -/
-  partial def parseValue : Parser Value := do
-    let pos ← getPosition
+  partial def parseValue : Sift.Parser Value := do
     skipWs
-    match ← peek? with
+    match ← peek with
     | some '"' =>
       -- Could be basic string or multi-line basic string
-      if (← peekN 3) == some "\"\"\"" then
+      if (← peekString 3) == some "\"\"\"" then
         return .string (← parseMultiLineBasicString)
       else
         return .string (← parseBasicString)
     | some '\'' =>
       -- Could be literal string or multi-line literal string
-      if (← peekN 3) == some "'''" then
+      if (← peekString 3) == some "'''" then
         return .string (← parseMultiLineLiteralString)
       else
         return .string (← parseLiteralString)
@@ -47,10 +47,10 @@ mutual
     | some '{' =>
       parseInlineTable
     | some 't' =>
-      expectString "true"
+      let _ ← string "true"
       return .boolean true
     | some 'f' =>
-      expectString "false"
+      let _ ← string "false"
       return .boolean false
     | some c =>
       -- Could be number or datetime
@@ -64,22 +64,21 @@ mutual
         -- Number with sign, or could be inf/nan
         parseNumber
       else
-        throw (.invalidValue pos s!"unexpected character: '{c}'")
+        Parser.fail s!"unexpected character: '{c}'"
     | none =>
-      throw (.unexpectedEnd "value")
+      Parser.fail "unexpected end of input while parsing value"
 
   /-- Parse a TOML array -/
-  partial def parseArray : Parser Value := do
-    let pos ← getPosition
-    expect '['
+  partial def parseArray : Sift.Parser Value := do
+    let _ ← char '['
     skipTrivia
 
     let mut elements : Array Value := #[]
     let mut expectedType : Option String := none
 
-    while (← peek?) != some ']' do
+    while (← peek) != some ']' do
       if ← atEnd then
-        throw (.invalidValue pos "unclosed array")
+        Parser.fail "unclosed array"
 
       let elem ← parseValue
       let elemType := valueTypeCategory elem
@@ -89,46 +88,44 @@ mutual
       | none => expectedType := some elemType
       | some expected =>
         if elemType != expected then
-          throw (.mixedArrayTypes pos)
+          Parser.fail "arrays must contain homogeneous types"
 
       elements := elements.push elem
       skipTrivia
 
       -- Check for comma or end
-      if (← peek?) == some ',' then
-        let _ ← next
+      if (← peek) == some ',' then
+        let _ ← anyChar
         skipTrivia
-      else if (← peek?) != some ']' then
-        throw (.invalidValue pos "expected ',' or ']' in array")
+      else if (← peek) != some ']' then
+        Parser.fail "expected ',' or ']' in array"
 
-    expect ']'
+    let _ ← char ']'
     return .array elements
 
   /-- Parse a TOML inline table -/
-  partial def parseInlineTable : Parser Value := do
-    let pos ← getPosition
-    expect '{'
+  partial def parseInlineTable : Sift.Parser Value := do
+    let _ ← char '{'
     skipWs
 
     let mut table := Table.empty
 
-    while (← peek?) != some '}' do
+    while (← peek) != some '}' do
       if ← atEnd then
-        throw (.invalidInlineTable pos "unclosed inline table")
+        Parser.fail "unclosed inline table"
 
       -- Parse key = value
       let keyParts ← parseDottedKey
       skipWs
-      expect '='
+      let _ ← char '='
       skipWs
       let value ← parseValue
 
       -- Check for duplicate key
-      let fullKey := String.intercalate "." keyParts
       match keyParts with
       | [k] =>
         if table.contains k then
-          throw (.duplicateKey pos k)
+          Parser.fail s!"duplicate key '{k}'"
         table := table.insert k value
       | _ =>
         -- Handle dotted key in inline table
@@ -137,13 +134,13 @@ mutual
       skipWs
 
       -- Check for comma or end
-      if (← peek?) == some ',' then
-        let _ ← next
+      if (← peek) == some ',' then
+        let _ ← anyChar
         skipWs
-      else if (← peek?) != some '}' then
-        throw (.invalidInlineTable pos "expected ',' or '}' in inline table")
+      else if (← peek) != some '}' then
+        Parser.fail "expected ',' or '}' in inline table"
 
-    expect '}'
+    let _ ← char '}'
     return .inlineTable table
 end
 

@@ -4,6 +4,7 @@ open Lake DSL
 package totem where
   version := v!"0.1.0"
 
+require sift from "../../util/sift"
 require crucible from git "https://github.com/nathanial/crucible" @ "v0.0.3"
 
 @[default_target]

@@ -1,21 +1,21 @@
 /-
   Totem.Parser.DateTime
-  TOML datetime parsing (RFC 3339)
+  TOML datetime parsing (RFC 3339) using Sift
 -/
+import Sift
 import Totem.Parser.Primitives
 import Totem.Core.Value
 
 namespace Totem.Parser
 
-open Totem Parser
+open Sift Totem
 
 /-- Parse local date: YYYY-MM-DD -/
-def parseLocalDate : Parser LocalDate := do
-  let pos ← getPosition
+def parseLocalDate : Sift.Parser LocalDate := do
   let yearStr ← readExactDigits 4
-  expect '-'
+  let _ ← char '-'
   let monthStr ← readExactDigits 2
-  expect '-'
+  let _ ← char '-'
   let dayStr ← readExactDigits 2
 
   let year := Int.ofNat yearStr.toNat!
@@ -24,27 +24,27 @@ def parseLocalDate : Parser LocalDate := do
 
   -- Basic validation
   if month < 1 || month > 12 then
-    throw (.invalidDateTime pos s!"invalid month: {month}")
+    Parser.fail s!"invalid month: {month}"
   if day < 1 || day > 31 then
-    throw (.invalidDateTime pos s!"invalid day: {day}")
+    Parser.fail s!"invalid day: {day}"
 
   return { year, month, day }
 
 /-- Parse fractional seconds, returning nanoseconds -/
-def parseFractionalSeconds : Parser Nat := do
+partial def parseFractionalSeconds : Sift.Parser Nat := do
   let mut result : Nat := 0
   let mut count := 0
   let mut going := true
   while going do
-    match ← peek? with
+    match ← peek with
     | some c =>
       if isDigit c && count < 9 then
-        let _ ← next
+        let _ ← anyChar
         result := result * 10 + (c.toNat - '0'.toNat)
         count := count + 1
       else if isDigit c then
         -- Skip extra digits beyond nanosecond precision
-        let _ ← next
+        let _ ← anyChar
       else
         going := false
     | none => going := false
@@ -55,12 +55,11 @@ def parseFractionalSeconds : Parser Nat := do
   return result
 
 /-- Parse local time: HH:MM:SS[.nnnnnnnnn] -/
-def parseLocalTime : Parser LocalTime := do
-  let pos ← getPosition
+def parseLocalTime : Sift.Parser LocalTime := do
   let hourStr ← readExactDigits 2
-  expect ':'
+  let _ ← char ':'
   let minuteStr ← readExactDigits 2
-  expect ':'
+  let _ ← char ':'
   let secondStr ← readExactDigits 2
 
   let hour := hourStr.toNat!
@@ -69,15 +68,15 @@ def parseLocalTime : Parser LocalTime := do
 
   -- Basic validation
   if hour > 23 then
-    throw (.invalidDateTime pos s!"invalid hour: {hour}")
+    Parser.fail s!"invalid hour: {hour}"
   if minute > 59 then
-    throw (.invalidDateTime pos s!"invalid minute: {minute}")
+    Parser.fail s!"invalid minute: {minute}"
   if second > 60 then  -- Allow 60 for leap seconds
-    throw (.invalidDateTime pos s!"invalid second: {second}")
+    Parser.fail s!"invalid second: {second}"
 
   -- Optional fractional seconds
-  let nanosecond ← if (← peek?) == some '.' then
-    let _ ← next
+  let nanosecond ← if (← peek) == some '.' then
+    let _ ← anyChar
     parseFractionalSeconds
   else
     pure 0
@@ -85,102 +84,90 @@ def parseLocalTime : Parser LocalTime := do
   return { hour, minute, second, nanosecond }
 
 /-- Parse timezone offset: Z, +HH:MM, -HH:MM -/
-def parseTimezoneOffset : Parser TimezoneOffset := do
-  let pos ← getPosition
-  match ← peek? with
+def parseTimezoneOffset : Sift.Parser TimezoneOffset := do
+  match ← peek with
   | some 'Z' | some 'z' =>
-    let _ ← next
+    let _ ← anyChar
     return { minutes := 0 }
   | some '+' =>
-    let _ ← next
+    let _ ← anyChar
     let hourStr ← readExactDigits 2
-    expect ':'
+    let _ ← char ':'
     let minuteStr ← readExactDigits 2
     let hours := hourStr.toNat!
     let mins := minuteStr.toNat!
     if hours > 23 || mins > 59 then
-      throw (.invalidDateTime pos "invalid timezone offset")
+      Parser.fail "invalid timezone offset"
     return { minutes := Int.ofNat (hours * 60 + mins) }
   | some '-' =>
-    let _ ← next
+    let _ ← anyChar
     let hourStr ← readExactDigits 2
-    expect ':'
+    let _ ← char ':'
     let minuteStr ← readExactDigits 2
     let hours := hourStr.toNat!
     let mins := minuteStr.toNat!
     if hours > 23 || mins > 59 then
-      throw (.invalidDateTime pos "invalid timezone offset")
+      Parser.fail "invalid timezone offset"
     return { minutes := -(Int.ofNat (hours * 60 + mins)) }
   | _ =>
-    throw (.invalidDateTime pos "expected timezone offset (Z, +HH:MM, or -HH:MM)")
+    Parser.fail "expected timezone offset (Z, +HH:MM, or -HH:MM)"
 
 /-- Parse full datetime with timezone: YYYY-MM-DDTHH:MM:SS[.nnn][Z|+HH:MM|-HH:MM] -/
-def parseFullDateTime : Parser DateTime := do
+def parseFullDateTime : Sift.Parser DateTime := do
   let date ← parseLocalDate
   -- Accept T or space as separator
-  match ← peek? with
-  | some 'T' | some 't' | some ' ' => let _ ← next
-  | _ =>
-    let pos ← getPosition
-    throw (.invalidDateTime pos "expected T or space between date and time")
+  match ← peek with
+  | some 'T' | some 't' | some ' ' => let _ ← anyChar
+  | _ => Parser.fail "expected T or space between date and time"
   let time ← parseLocalTime
   let timezone ← parseTimezoneOffset
   return { date, time, timezone := some timezone }
 
 /-- Parse local datetime (no timezone): YYYY-MM-DDTHH:MM:SS[.nnn] -/
-def parseLocalDateTime : Parser DateTime := do
+def parseLocalDateTime : Sift.Parser DateTime := do
   let date ← parseLocalDate
-  match ← peek? with
-  | some 'T' | some 't' | some ' ' => let _ ← next
-  | _ =>
-    let pos ← getPosition
-    throw (.invalidDateTime pos "expected T or space between date and time")
+  match ← peek with
+  | some 'T' | some 't' | some ' ' => let _ ← anyChar
+  | _ => Parser.fail "expected T or space between date and time"
   let time ← parseLocalTime
   return { date, time, timezone := none }
 
 /-- Check what kind of datetime this is and parse accordingly -/
-def parseDateTimeOrDate : Parser Value := do
-  let startState ← get
-  let date ← parseLocalDate
-
-  -- Check if there's a time component
-  match ← peek? with
+def parseDateTimeOrDate : Sift.Parser Value := do
+  let date ← lookAhead parseLocalDate
+  -- Re-parse and check if there's a time component
+  let _ ← parseLocalDate
+  match ← peek with
   | some 'T' | some 't' | some ' ' =>
-    set startState
-    -- Check if there's a timezone after the time
-    let dt ← parseLocalDateTime
-    match ← peek? with
+    let _ ← anyChar
+    let time ← parseLocalTime
+    match ← peek with
     | some 'Z' | some 'z' | some '+' | some '-' =>
-      -- Has timezone, reparse as full datetime
-      set startState
-      return .dateTime (← parseFullDateTime)
+      -- Has timezone
+      let tz ← parseTimezoneOffset
+      return .dateTime { date, time, timezone := some tz }
     | _ =>
       -- No timezone, it's a local datetime
-      return .localDateTime dt
+      return .localDateTime { date, time, timezone := none }
   | _ =>
     -- Just a date
     return .localDate date
 
 /-- Check if current position looks like a datetime (starts with 4 digits and hyphen) -/
-def looksLikeDateTime : Parser Bool := do
-  let startState ← get
-  let mut count := 0
-  -- Check for 4 digits
-  while count < 4 do
-    match ← peek? with
-    | some c =>
-      if isDigit c then
-        let _ ← next
-        count := count + 1
-      else
-        set startState
-        return false
-    | none =>
-      set startState
-      return false
-  -- Check for hyphen
-  let result := (← peek?) == some '-'
-  set startState
-  return result
+def looksLikeDateTime : Sift.Parser Bool := do
+  lookAhead do
+    let mut count := 0
+    -- Check for 4 digits
+    while count < 4 do
+      match ← peek with
+      | some c =>
+        if isDigit c then
+          let _ ← anyChar
+          count := count + 1
+        else
+          return false
+      | none => return false
+    -- Check for hyphen
+    return (← peek) == some '-'
 
 end Totem.Parser

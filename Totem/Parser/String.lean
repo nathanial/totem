@@ -1,12 +1,13 @@
 /-
   Totem.Parser.String
-  TOML string parsing (basic, literal, multi-line)
+  TOML string parsing (basic, literal, multi-line) using Sift
 -/
+import Sift
 import Totem.Parser.Primitives
 
 namespace Totem.Parser
 
-open Totem Parser
+open Sift
 
 /-- Get hex digit character -/
 private def hexChar (n : Nat) : Char :=
@@ -23,49 +24,24 @@ where
     else go (n / 16) (hexChar (n % 16) :: acc)
 
 /-- Parse a 4-digit unicode escape (\uXXXX) -/
-def parseUnicodeEscape4 : Parser Char := do
-  let pos ← getPosition
-  let mut codePoint : Nat := 0
-  let mut count := 0
-  while count < 4 do
-    match ← peek? with
-    | some c =>
-      if isHexDigit c then
-        let _ ← next
-        codePoint := codePoint * 16 + hexDigitValue c
-        count := count + 1
-      else
-        throw (.invalidString pos s!"invalid unicode escape: expected hex digit, got '{c}'")
-    | none => throw (.invalidString pos "incomplete unicode escape")
-  if h : codePoint < 0x110000 then
-    return Char.ofNat codePoint
+def parseUnicodeEscape4 : Sift.Parser Char := do
+  let code ← hexDigitsN 4
+  if h : code.toUInt32 < 0x110000 then
+    pure (Char.ofNat code)
   else
-    throw (.invalidString pos s!"invalid unicode code point: {codePoint}")
+    Parser.fail s!"invalid unicode code point: {code}"
 
 /-- Parse an 8-digit unicode escape (\UXXXXXXXX) -/
-def parseUnicodeEscape8 : Parser Char := do
-  let pos ← getPosition
-  let mut codePoint : Nat := 0
-  let mut count := 0
-  while count < 8 do
-    match ← peek? with
-    | some c =>
-      if isHexDigit c then
-        let _ ← next
-        codePoint := codePoint * 16 + hexDigitValue c
-        count := count + 1
-      else
-        throw (.invalidString pos s!"invalid unicode escape: expected hex digit, got '{c}'")
-    | none => throw (.invalidString pos "incomplete unicode escape")
-  if h : codePoint < 0x110000 then
-    return Char.ofNat codePoint
+def parseUnicodeEscape8 : Sift.Parser Char := do
+  let code ← hexDigitsN 8
+  if h : code.toUInt32 < 0x110000 then
+    pure (Char.ofNat code)
   else
-    throw (.invalidString pos s!"invalid unicode code point: {codePoint}")
+    Parser.fail s!"invalid unicode code point: {code}"
 
 /-- Parse escape sequence in basic string -/
-def parseEscape : Parser Char := do
-  let pos ← getPosition
-  let escaped ← next
+def parseEscape : Sift.Parser Char := do
+  let escaped ← anyChar
   match escaped with
   | 'b' => return '\x08'  -- backspace
   | 't' => return '\t'    -- tab
@@ -76,129 +52,124 @@ def parseEscape : Parser Char := do
   | '\\' => return '\\'
   | 'u' => parseUnicodeEscape4
   | 'U' => parseUnicodeEscape8
-  | c => throw (.invalidString pos s!"invalid escape sequence: \\{c}")
+  | c => Parser.fail s!"invalid escape sequence: \\{c}"
 
 /-- Parse basic string (double-quoted with escapes) -/
-def parseBasicString : Parser String := do
-  let pos ← getPosition
-  expect '"'
+partial def parseBasicString : Sift.Parser String := do
+  let _ ← char '"'
   let mut result := ""
-  while (← peek?) != some '"' do
+  while (← peek) != some '"' do
     if ← atEnd then
-      throw (.invalidString pos "unclosed string")
-    let c ← next
+      Parser.fail "unclosed string"
+    let c ← anyChar
     if c == '\\' then
       let unescaped ← parseEscape
       result := result.push unescaped
     else if c == '\n' then
-      throw (.invalidString pos "newline not allowed in basic string")
+      Parser.fail "newline not allowed in basic string"
     else if c.toNat < 0x20 && c != '\t' then
-      throw (.invalidString pos s!"control character not allowed: U+{toHexString c.toNat}")
+      Parser.fail s!"control character not allowed: U+{toHexString c.toNat}"
     else
       result := result.push c
-  expect '"'
+  let _ ← char '"'
   return result
 
 /-- Parse multi-line basic string (triple double-quoted) -/
-def parseMultiLineBasicString : Parser String := do
-  let pos ← getPosition
-  expectString "\"\"\""
+partial def parseMultiLineBasicString : Sift.Parser String := do
+  let _ ← string "\"\"\""
   -- Skip immediate newline after opening quotes
-  if (← peek?) == some '\n' then
-    let _ ← next
-  else if (← peek?) == some '\r' then
-    let _ ← next
-    if (← peek?) == some '\n' then
-      let _ ← next
+  if (← peek) == some '\n' then
+    let _ ← anyChar
+  else if (← peek) == some '\r' then
+    let _ ← anyChar
+    if (← peek) == some '\n' then
+      let _ ← anyChar
   let mut result := ""
   while true do
     if ← atEnd then
-      throw (.invalidString pos "unclosed multi-line string")
+      Parser.fail "unclosed multi-line string"
     -- Check for closing quotes
-    if (← peekN 3) == some "\"\"\"" then
-      expectString "\"\"\""
+    if (← peekString 3) == some "\"\"\"" then
+      let _ ← string "\"\"\""
       break
-    let c ← next
+    let c ← anyChar
     if c == '\\' then
       -- Check for line-ending backslash
-      match ← peek? with
+      match ← peek with
       | some '\n' =>
-        let _ ← next
+        let _ ← anyChar
         -- Skip whitespace on next line
-        while (← peek?).any (fun c => c == ' ' || c == '\t' || c == '\n' || c == '\r') do
-          let _ ← next
+        while (← peek).any (fun c => c == ' ' || c == '\t' || c == '\n' || c == '\r') do
+          let _ ← anyChar
       | some '\r' =>
-        let _ ← next
-        if (← peek?) == some '\n' then
-          let _ ← next
-        while (← peek?).any (fun c => c == ' ' || c == '\t' || c == '\n' || c == '\r') do
-          let _ ← next
+        let _ ← anyChar
+        if (← peek) == some '\n' then
+          let _ ← anyChar
+        while (← peek).any (fun c => c == ' ' || c == '\t' || c == '\n' || c == '\r') do
+          let _ ← anyChar
       | _ =>
         let unescaped ← parseEscape
         result := result.push unescaped
     else if c.toNat < 0x20 && c != '\t' && c != '\n' && c != '\r' then
-      throw (.invalidString pos s!"control character not allowed: U+{toHexString c.toNat}")
+      Parser.fail s!"control character not allowed: U+{toHexString c.toNat}"
     else
       result := result.push c
   return result
 
 /-- Parse literal string (single-quoted, no escapes) -/
-def parseLiteralString : Parser String := do
-  let pos ← getPosition
-  expect '\''
+partial def parseLiteralString : Sift.Parser String := do
+  let _ ← char '\''
   let mut result := ""
-  while (← peek?) != some '\'' do
+  while (← peek) != some '\'' do
     if ← atEnd then
-      throw (.invalidString pos "unclosed literal string")
-    let c ← next
+      Parser.fail "unclosed literal string"
+    let c ← anyChar
     if c == '\n' then
-      throw (.invalidString pos "newline not allowed in literal string")
+      Parser.fail "newline not allowed in literal string"
     else if c.toNat < 0x20 && c != '\t' then
-      throw (.invalidString pos s!"control character not allowed: U+{toHexString c.toNat}")
+      Parser.fail s!"control character not allowed: U+{toHexString c.toNat}"
     else
       result := result.push c
-  expect '\''
+  let _ ← char '\''
   return result
 
 /-- Parse multi-line literal string (triple single-quoted) -/
-def parseMultiLineLiteralString : Parser String := do
-  let pos ← getPosition
-  expectString "'''"
+partial def parseMultiLineLiteralString : Sift.Parser String := do
+  let _ ← string "'''"
   -- Skip immediate newline after opening quotes
-  if (← peek?) == some '\n' then
-    let _ ← next
-  else if (← peek?) == some '\r' then
-    let _ ← next
-    if (← peek?) == some '\n' then
-      let _ ← next
+  if (← peek) == some '\n' then
+    let _ ← anyChar
+  else if (← peek) == some '\r' then
+    let _ ← anyChar
+    if (← peek) == some '\n' then
+      let _ ← anyChar
   let mut result := ""
   while true do
     if ← atEnd then
-      throw (.invalidString pos "unclosed multi-line literal string")
+      Parser.fail "unclosed multi-line literal string"
     -- Check for closing quotes
-    if (← peekN 3) == some "'''" then
-      expectString "'''"
+    if (← peekString 3) == some "'''" then
+      let _ ← string "'''"
       break
-    let c ← next
+    let c ← anyChar
     if c.toNat < 0x20 && c != '\t' && c != '\n' && c != '\r' then
-      throw (.invalidString pos s!"control character not allowed: U+{toHexString c.toNat}")
+      Parser.fail s!"control character not allowed: U+{toHexString c.toNat}"
     else
       result := result.push c
   return result
 
 /-- Parse any TOML string (basic, literal, or multi-line variants) -/
-def parseString : Parser String := do
+def parseString : Sift.Parser String := do
   -- Check for triple quotes first (order matters)
-  if (← peekN 3) == some "\"\"\"" then
+  if (← peekString 3) == some "\"\"\"" then
     parseMultiLineBasicString
-  else if (← peekN 3) == some "'''" then
+  else if (← peekString 3) == some "'''" then
     parseMultiLineLiteralString
-  else if (← peek?) == some '"' then
+  else if (← peek) == some '"' then
     parseBasicString
-  else if (← peek?) == some '\'' then
+  else if (← peek) == some '\'' then
     parseLiteralString
   else
-    let pos ← getPosition
-    throw (.invalidString pos "expected string")
+    Parser.fail "expected string"
 
 end Totem.Parser

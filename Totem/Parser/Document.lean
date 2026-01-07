@@ -1,29 +1,30 @@
 /-
   Totem.Parser.Document
-  Top-level TOML document parsing
+  Top-level TOML document parsing using Sift
 -/
+import Sift
 import Totem.Parser.Value
 
 namespace Totem.Parser
 
-open Totem Parser
+open Sift Totem
 
 /-- Parse a table header path [table.path] -/
-def parseTableHeader : Parser (List String) := do
-  expect '['
+def parseTableHeader : Sift.Parser (List String) := do
+  let _ ← char '['
   skipWs
   let path ← parseDottedKey
   skipWs
-  expect ']'
+  let _ ← char ']'
   return path
 
 /-- Parse an array of tables header [[array.path]] -/
-def parseArrayOfTablesHeader : Parser (List String) := do
-  expectString "[["
+def parseArrayOfTablesHeader : Sift.Parser (List String) := do
+  let _ ← string "[["
   skipWs
   let path ← parseDottedKey
   skipWs
-  expectString "]]"
+  let _ ← string "]]"
   return path
 
 /-- State for tracking implicit vs explicit tables -/
@@ -34,16 +35,16 @@ structure DocParserState where
   arrayOfTables : Array (List String) := #[]
 
 /-- Check if a table path would conflict with existing definitions -/
-def checkTableConflict (state : DocParserState) (path : List String) (pos : Position) : Parser Unit := do
+def checkTableConflict (state : DocParserState) (path : List String) : Sift.Parser Unit := do
   -- Check if this exact path was already defined as an explicit table
   if state.explicitTables.contains path then
-    throw (.duplicateKey pos (String.intercalate "." path))
+    Parser.fail s!"duplicate table '{String.intercalate "." path}'"
   -- Check if any prefix is an array of tables (can't redefine as regular table)
   let mut i := 0
   while i < path.length do
     let pathPrefix := path.take (i + 1)
     if state.arrayOfTables.contains pathPrefix && pathPrefix != path then
-      throw (.invalidTablePath pos s!"cannot define table '{String.intercalate "." path}' because '{String.intercalate "." pathPrefix}' is an array of tables")
+      Parser.fail s!"cannot define table '{String.intercalate "." path}' because '{String.intercalate "." pathPrefix}' is an array of tables"
     i := i + 1
 
 /-- Ensure parent tables exist for a path -/
@@ -91,7 +92,7 @@ def appendToArrayOfTables (root : Table) (path : List String) (newTable : Table)
     root.insertPath parentPath (.inlineTable (parent.insert key (.array arr)))
 
 /-- Parse a complete TOML document -/
-partial def parseDocument : Parser Table := do
+partial def parseDocument : Sift.Parser Table := do
   let mut root := Table.empty
   let mut currentPath : List String := []
   let mut state : DocParserState := {}
@@ -99,13 +100,11 @@ partial def parseDocument : Parser Table := do
   skipTrivia
 
   while !(← atEnd) do
-    let pos ← getPosition
-
     -- Check what we're looking at
-    match ← peek? with
+    match ← peek with
     | some '[' =>
       -- Could be table header or array of tables
-      if (← peekN 2) == some "[[" then
+      if (← peekString 2) == some "[[" then
         -- Array of tables
         let path ← parseArrayOfTablesHeader
         skipLineTrivia
@@ -126,7 +125,7 @@ partial def parseDocument : Parser Table := do
         skipTrivia
 
         -- Check for conflicts
-        checkTableConflict state path pos
+        checkTableConflict state path
 
         -- Record as explicit table
         state := { state with explicitTables := state.explicitTables.push path }
@@ -151,7 +150,7 @@ partial def parseDocument : Parser Table := do
         -- Key-value pair
         let keyParts ← parseDottedKey
         skipWs
-        expect '='
+        let _ ← char '='
         skipWs
         let value ← parseValue
         skipLineTrivia
@@ -182,7 +181,7 @@ partial def parseDocument : Parser Table := do
           -- Regular table
           root := root.insertPath fullPath value
       else
-        throw (.other pos s!"unexpected character: '{c}'")
+        Parser.fail s!"unexpected character: '{c}'"
 
     | none =>
       -- End of input, will exit loop
@@ -191,7 +190,7 @@ partial def parseDocument : Parser Table := do
   return root
 
 /-- Parse TOML from a string -/
-def parse (input : String) : ParseResult Table :=
-  Parser.run parseDocument input
+def parse (input : String) : Except Sift.ParseError Table :=
+  Sift.Parser.parse parseDocument input
 
 end Totem.Parser
