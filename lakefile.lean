@@ -5,7 +5,7 @@ package totem where
   version := v!"0.1.1"
 
 require sift from git "https://github.com/nathanial/sift" @ "v0.0.4"
-require crucible from git "https://github.com/nathanial/crucible" @ "v0.0.3"
+require crucible from git "https://github.com/nathanial/crucible" @ "v0.0.7"
 
 @[default_target]
 lean_lib Totem where
