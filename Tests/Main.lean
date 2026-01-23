@@ -68,8 +68,6 @@ test "multi-line literal string" := do
     v ≡ "no \\escape\nhere"
   | .error e => throw (IO.userError s!"{e}")
 
-#generate_tests
-
 end Tests.Strings
 
 namespace Tests.Numbers
@@ -142,8 +140,6 @@ test "negative float" := do
     else throw (IO.userError s!"expected ~-0.5, got {v}")
   | .error e => throw (IO.userError s!"{e}")
 
-#generate_tests
-
 end Tests.Numbers
 
 namespace Tests.Booleans
@@ -163,8 +159,6 @@ test "false" := do
     let v ← t.getAs (α := Bool) "key" |>.toIO
     v ≡ false
   | .error e => throw (IO.userError s!"{e}")
-
-#generate_tests
 
 end Tests.Booleans
 
@@ -195,8 +189,6 @@ test "local date" := do
       d.day ≡ 25
     | _ => throw (IO.userError "expected local date")
   | .error e => throw (IO.userError s!"{e}")
-
-#generate_tests
 
 end Tests.DateTime
 
@@ -234,8 +226,6 @@ test "multiline array" := do
     let v ← t.getAs (α := Array Int) "key" |>.toIO
     v ≡ #[1, 2, 3]
   | .error e => throw (IO.userError s!"{e}")
-
-#generate_tests
 
 end Tests.Arrays
 
@@ -280,8 +270,6 @@ test "dotted keys" := do
     v ≡ "value"
   | .error e => throw (IO.userError s!"{e}")
 
-#generate_tests
-
 end Tests.Tables
 
 namespace Tests.ArrayOfTables
@@ -297,8 +285,6 @@ test "basic array of tables" := do
       arr.size ≡ 2
     | _ => throw (IO.userError "expected array of products")
   | .error e => throw (IO.userError s!"{e}")
-
-#generate_tests
 
 end Tests.ArrayOfTables
 
@@ -348,8 +334,6 @@ test "type conversion error" := do
     | .error e => throw (IO.userError s!"wrong error: {e}")
   | .error e => throw (IO.userError s!"{e}")
 
-#generate_tests
-
 end Tests.Extract
 
 namespace Tests.Env
@@ -388,8 +372,6 @@ test "missing env var without default errors" := do
   | .ok _ => throw (IO.userError "expected error")
   | .error _ => pure ()
 
-#generate_tests
-
 end Tests.Env
 
 namespace Tests.Comments
@@ -411,8 +393,6 @@ test "inline comment" := do
     let v ← t.getAs (α := String) "key" |>.toIO
     v ≡ "value"
   | .error e => throw (IO.userError s!"{e}")
-
-#generate_tests
 
 end Tests.Comments
 
